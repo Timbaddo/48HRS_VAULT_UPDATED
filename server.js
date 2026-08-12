@@ -321,7 +321,7 @@ async function connectToWhatsApp(sessionDoc) {
       const shouldReconnect =
         lastDisconnect?.error instanceof Boom
           ? lastDisconnect.error.output?.statusCode !==
-            disconnectReason.loggedOut
+            DisconnectReason.loggedOut
           : true;
 
       console.log(
