@@ -11,6 +11,16 @@ const router = express.Router();
 
 
 // ==========================================
+// ADMIN EMAILS
+// ==========================================
+
+const adminEmails = (process.env.ADMIN_EMAILS || "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+
+// ==========================================
 // GET CURRENT USER
 // ==========================================
 
@@ -30,11 +40,9 @@ router.get(
         });
       }
 
-      const ownerEmails = (process.env.ADMIN_EMAILS || "")
-        .split(",")
-        .map((email) => email.trim().toLowerCase())
-        .filter(Boolean);
-      const isAdmin = ownerEmails.includes((user.email || "").toLowerCase());
+      const isAdmin = adminEmails.includes(
+        (user.email || "").toLowerCase()
+      );
 
       return res.json({
         success: true,
@@ -50,8 +58,7 @@ router.get(
 
       return res.status(500).json({
         success: false,
-        message:
-          "Unable to load your account."
+        message: "Unable to load your account."
       });
     }
   }
@@ -77,107 +84,185 @@ router.post(
         deviceFingerprint
       } = req.body;
 
-      const firebaseUid =
-        req.user.uid;
+      const firebaseUid = req.user.uid;
 
-      const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean);
+      // --------------------------------------
+      // NORMALIZE INPUTS
+      // --------------------------------------
 
-      if (!name || !email) {
+      const normalizedEmail = String(email || "")
+        .trim()
+        .toLowerCase();
+
+      const normalizedWhatsApp =
+        whatsappNumber
+          ? String(whatsappNumber).replace(/[^0-9]/g, "")
+          : null;
+
+      if (!name || !normalizedEmail) {
         return res.status(400).json({
           success: false,
-          message:
-            "Name and email are required."
+          message: "Name and email are required."
         });
       }
 
-      // ========================================
-      // CHECK EXISTING USER
-      // ========================================
+      const isAdmin = adminEmails.includes(
+        normalizedEmail
+      );
 
-      let user = await User.findOne({ firebaseUid });
+      // ======================================
+      // CHECK USER BY FIREBASE UID
+      // ======================================
 
-      if (!user && whatsappNumber) {
-        const normalizedWhatsApp = String(whatsappNumber).replace(/[^0-9]/g, "");
-        user = await User.findOne({ whatsappNumber: normalizedWhatsApp });
-        if (user && !user.firebaseUid) user.firebaseUid = firebaseUid;
+      let user = await User.findOne({
+        firebaseUid
+      });
+
+      // ======================================
+      // CHECK USER BY WHATSAPP NUMBER
+      // ======================================
+
+      if (!user && normalizedWhatsApp) {
+        user = await User.findOne({
+          $or: [
+            {
+              phoneNumber: normalizedWhatsApp
+            },
+            {
+              whatsappNumber: normalizedWhatsApp
+            }
+          ]
+        });
+
+        if (user && !user.firebaseUid) {
+          user.firebaseUid = firebaseUid;
+        }
       }
+
+      // ======================================
+      // EXISTING USER
+      // ======================================
 
       if (user) {
         user.name = name;
-        user.email = email;
-        if (adminEmails.includes(email.toLowerCase())) user.role = "ADMIN";
+        user.email = normalizedEmail;
 
-        if (
-          whatsappNumber !== undefined
-        ) {
-          user.whatsappNumber = whatsappNumber ? String(whatsappNumber).replace(/[^0-9]/g, "") : null;
+        if (isAdmin) {
+          user.role = "ADMIN";
         }
 
-        if (
-          country !== undefined
-        ) {
-          user.country =
-            country || null;
+        if (normalizedWhatsApp !== null) {
+          user.whatsappNumber =
+            normalizedWhatsApp;
         }
 
-        user.lastLogin =
-          new Date();
+        if (country !== undefined) {
+          user.country = country || null;
+        }
+
+        user.lastLogin = new Date();
 
         await user.save();
 
         return res.json({
           success: true,
-          message:
-            "Account synced successfully.",
+          message: "Account synced successfully.",
           user
         });
       }
 
-      // ========================================
+      // ======================================
       // LINK EXISTING WHATSAPP-ONLY USER
-      // ========================================
+      // ======================================
 
-      if (whatsappNumber) {
-        const normalizedWhatsApp = String(whatsappNumber).replace(/[^0-9]/g, '');
+      if (normalizedWhatsApp) {
         const botUser = await User.findOne({
           $or: [
-            { phoneNumber: normalizedWhatsApp },
-            { whatsappNumber: normalizedWhatsApp }
+            {
+              phoneNumber: normalizedWhatsApp
+            },
+            {
+              whatsappNumber: normalizedWhatsApp
+            }
           ],
-          firebaseUid: null
+          $or: [
+            {
+              firebaseUid: null
+            },
+            {
+              firebaseUid: {
+                $exists: false
+              }
+            }
+          ]
         });
 
         if (botUser) {
           botUser.firebaseUid = firebaseUid;
           botUser.name = name;
-          botUser.email = email;
-          botUser.role = adminEmails.includes(email.toLowerCase()) ? "ADMIN" : (botUser.role === "ADMIN" ? "ADMIN" : "USER");
-          botUser.whatsappNumber = normalizedWhatsApp;
-          botUser.phoneNumber = normalizedWhatsApp;
+          botUser.email = normalizedEmail;
+
+          botUser.role = isAdmin
+            ? "ADMIN"
+            : (
+                botUser.role === "ADMIN"
+                  ? "ADMIN"
+                  : "USER"
+              );
+
+          botUser.whatsappNumber =
+            normalizedWhatsApp;
+
+          botUser.phoneNumber =
+            normalizedWhatsApp;
+
           botUser.lastLogin = new Date();
+
+          // ----------------------------------
+          // MAKE SURE REFERRAL CODE EXISTS
+          // ----------------------------------
 
           if (!botUser.referral?.code) {
             let linkedCode;
+
             do {
-              linkedCode = `48HRS-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-            } while (await User.exists({ 'referral.code': linkedCode }));
-            botUser.referral.code = linkedCode;
-            botUser.refCode = botUser.refCode || linkedCode;
+              linkedCode =
+                `48HRS-${Math.random()
+                  .toString(36)
+                  .substring(2, 8)
+                  .toUpperCase()}`;
+            } while (
+              await User.exists({
+                "referral.code": linkedCode
+              })
+            );
+
+            if (!botUser.referral) {
+              botUser.referral = {};
+            }
+
+            botUser.referral.code =
+              linkedCode;
+
+            botUser.refCode =
+              botUser.refCode ||
+              linkedCode;
           }
 
           await botUser.save();
 
           return res.json({
             success: true,
-            message: "Existing WhatsApp account linked successfully.",
+            message:
+              "Existing WhatsApp account linked successfully.",
             user: botUser
           });
         }
       }
 
-      // ========================================
+      // ======================================
       // GENERATE UNIQUE REFERRAL CODE
-      // ========================================
+      // ======================================
 
       let generatedCode;
       let codeExists = true;
@@ -191,14 +276,13 @@ router.post(
 
         codeExists =
           await User.exists({
-            "referral.code":
-              generatedCode
+            "referral.code": generatedCode
           });
       }
 
-      // ========================================
+      // ======================================
       // FIND REFERRER
-      // ========================================
+      // ======================================
 
       let referrer = null;
       let referredBy = null;
@@ -206,7 +290,7 @@ router.post(
 
       if (referralCode) {
         normalizedReferralCode =
-          referralCode
+          String(referralCode)
             .trim()
             .toUpperCase();
 
@@ -216,14 +300,13 @@ router.post(
               normalizedReferralCode
           });
 
-        // ======================================
-        // SELF-REFERRAL PROTECTION
-        // ======================================
+        // ------------------------------------
+        // SELF REFERRAL PROTECTION
+        // ------------------------------------
 
         if (
           referrer &&
-          referrer.firebaseUid ===
-            firebaseUid
+          referrer.firebaseUid === firebaseUid
         ) {
           return res.status(400).json({
             success: false,
@@ -238,20 +321,23 @@ router.post(
         }
       }
 
-      // ========================================
-      // CREATE USER
-      // ========================================
+      // ======================================
+      // CREATE NEW USER
+      // ======================================
 
       user = await User.create({
         firebaseUid,
 
         name,
 
-        email,
+        email: normalizedEmail,
 
-        role: ownerEmails.includes(email.toLowerCase()) ? "ADMIN" : "USER",
+        role: isAdmin
+          ? "ADMIN"
+          : "USER",
 
-        whatsappNumber: whatsappNumber ? String(whatsappNumber).replace(/[^0-9]/g, "") : null,
+        whatsappNumber:
+          normalizedWhatsApp,
 
         country:
           country || null,
@@ -265,10 +351,10 @@ router.post(
           expiresAt:
             new Date(
               Date.now() +
-                24 *
-                  60 *
-                  60 *
-                  1000
+              24 *
+              60 *
+              60 *
+              1000
             )
         },
 
@@ -308,9 +394,9 @@ router.post(
           false
       });
 
-      // ========================================
+      // ======================================
       // CREATE REFERRAL RECORD
-      // ========================================
+      // ======================================
 
       if (
         referrer &&
@@ -334,8 +420,7 @@ router.post(
               ipAddress || null,
 
             deviceFingerprint:
-              deviceFingerprint ||
-              null,
+              deviceFingerprint || null,
 
             accountCreated:
               true,
@@ -354,23 +439,16 @@ router.post(
           });
 
         } catch (referralError) {
-
-          /*
-          ======================================
-          REFERRAL CREATION FAILED
-
-          The user was already created, so
-          don't delete the account here.
-          Log the error for investigation.
-          ======================================
-          */
-
           console.error(
             "Referral record creation error:",
             referralError
           );
         }
       }
+
+      // ======================================
+      // SUCCESS
+      // ======================================
 
       return res.status(201).json({
         success: true,
@@ -385,9 +463,11 @@ router.post(
         error
       );
 
-      if (
-        error.code === 11000
-      ) {
+      // --------------------------------------
+      // DUPLICATE KEY
+      // --------------------------------------
+
+      if (error.code === 11000) {
         return res.status(409).json({
           success: false,
           message:
@@ -471,29 +551,50 @@ router.patch(
   requireAuth,
   async (req, res) => {
     try {
-      const user = await User.findOneAndUpdate(
-        { firebaseUid: req.user.uid },
-        { $set: { officialPlatformsPopupAt: new Date() } },
-        { new: true, runValidators: true }
-      ).select("-__v");
+      const user =
+        await User.findOneAndUpdate(
+          {
+            firebaseUid:
+              req.user.uid
+          },
+          {
+            $set: {
+              officialPlatformsPopupAt:
+                new Date()
+            }
+          },
+          {
+            new: true,
+            runValidators: true
+          }
+        ).select("-__v");
 
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "User account not found."
+          message:
+            "User account not found."
         });
       }
 
       return res.json({
         success: true,
-        message: "Popup timestamp updated.",
-        officialPlatformsPopupAt: user.officialPlatformsPopupAt
+        message:
+          "Popup timestamp updated.",
+        officialPlatformsPopupAt:
+          user.officialPlatformsPopupAt
       });
+
     } catch (error) {
-      console.error("Official platforms popup error:", error);
+      console.error(
+        "Official platforms popup error:",
+        error
+      );
+
       return res.status(500).json({
         success: false,
-        message: "Unable to update popup status."
+        message:
+          "Unable to update popup status."
       });
     }
   }
@@ -525,12 +626,13 @@ router.patch(
         whatsappNumber !== undefined
       ) {
         updates.whatsappNumber =
-          whatsappNumber || null;
+          whatsappNumber
+            ? String(whatsappNumber)
+                .replace(/[^0-9]/g, "")
+            : null;
       }
 
-      if (
-        country !== undefined
-      ) {
+      if (country !== undefined) {
         updates.country =
           country || null;
       }
