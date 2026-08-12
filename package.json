@@ -1,0 +1,26 @@
+{
+  "name": "48hrs-vault",
+  "version": "1.0.0",
+  "description": "48HRS VAULT WhatsApp bot and platform",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "axios": "latest",
+    "body-parser": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "firebase-admin": "latest",
+    "mongoose": "latest",
+    "multer": "latest",
+    "node-cron": "latest",
+    "pino": "latest",
+    "@hapi/boom": "^10.0.1",
+    "cloudinary": "latest"
+  }
+}

@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+secrets/
+auth_sessions/
+node_modules/
+*.log
+.DS_Store
+
+# Uploaded tutorial videos
+uploads/

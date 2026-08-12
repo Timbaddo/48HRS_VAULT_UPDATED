@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Docs — 48HRS VAULT</title><link rel="icon" href="/logo.png"><link rel="stylesheet" href="/frontend/css/style.css"></head><body><header class="nav wrap"><a class="brand" href="/index.html"><img src="/logo.png" alt="48HRS VAULT"><span>48HRS <b>VAULT</b></span></a><nav><a href="/pricing.html">Pricing</a><a class="btn btn-small" href="/signup.html">Get Started</a></nav></header><main class="wrap section prose"><span class="eyebrow">DOCUMENTATION</span><h1>How 48HRS VAULT works</h1><h2>1. Create your account</h2><p>Sign up with Firebase authentication and sync your account with the platform.</p><h2>2. Connect WhatsApp</h2><p>Use the bot pairing flow to connect your WhatsApp number. Your trial is tracked by the backend.</p><h2>3. Use your trial</h2><p>Your free trial lasts 24 hours. Actual bot usage is recorded separately from trial expiration.</p><h2>4. Upgrade</h2><p>When your trial ends, activate VIP from the dashboard through the available payment flow.</p><h2>5. Refer friends</h2><p>Qualified referrals can unlock 1-month VIP at 3 referrals and lifetime VIP at 10 referrals.</p>
+<section class="wrap section">
+  <div class="section-title"><span class="eyebrow">TUTORIALS</span><h2>Video tutorials</h2><p class="muted">Tutorial videos are published by the Owner and appear here when available.</p></div>
+  <div id="docsTutorials" class="tutorial-grid"><p class="muted">Loading tutorials…</p></div>
+</section>
+<section class="wrap section">
+  <div class="section-title"><span class="eyebrow">SUPPORT</span><h2>Contact support</h2></div>
+  <div class="support-grid">
+    <a class="support-item" href="mailto:timothydabere@gmail.com"><strong>✉️ Email</strong><span>timothydabere@gmail.com</span></a>
+    <a class="support-item" href="https://whatsapp.com/channel/0029Vb8x0L7DjiOlt0DiGE34" target="_blank" rel="noopener"><strong>💬 WhatsApp</strong><span>Official Channel</span></a>
+    <a class="support-item" href="https://www.facebook.com/48HRSvault" target="_blank" rel="noopener"><strong>📘 Facebook</strong><span>48HRS VAULT</span></a>
+  </div>
+</section>
+<script>
+fetch('/api/tutorials').then(r=>r.json()).then(data=>{const el=document.getElementById('docsTutorials');if(!data.success||!data.tutorials?.length){el.innerHTML='<p class="muted">No tutorials published yet.</p>';return;}el.innerHTML=data.tutorials.map(t=>`<article class="tutorial-card"><div class="tutorial-video-wrap"><video controls preload="metadata" src="${t.videoUrl}"></video></div><div class="tutorial-body"><h3>${String(t.title).replace(/[&<>]/g,'')}</h3><p class="muted">${String(t.description||'').replace(/[&<>]/g,'')}</p></div></article>`).join('');}).catch(()=>{document.getElementById('docsTutorials').innerHTML='<p class="muted">Tutorials unavailable.</p>';});
+</script>
+</main></body></html>
