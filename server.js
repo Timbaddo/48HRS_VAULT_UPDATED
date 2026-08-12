@@ -19,7 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import makeWASocket, {
   useMultiFileAuthState,
-  disconnectReason,
+  DisconnectReason,
   fetchLatestBaileysVersion
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
