@@ -40,11 +40,11 @@ const userSchema = new mongoose.Schema(
     // ==========================================
 
     phoneNumber: {
-      type: String,
-      unique: true,
-      sparse: true,
-      default: null
-    },
+  type: String,
+  unique: true,
+  sparse: true,
+  trim: true
+},
 
     whatsappNumber: {
       type: String,
