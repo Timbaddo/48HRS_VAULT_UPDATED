@@ -1,381 +1,347 @@
-import express from 'express';
-import mongoose from 'mongoose';
-import User from './models/User.js';
-import connectDatabase from "./config/database.js";
-import authRoutes from "./routes/authRoutes.js";
-import adminRoutes from "./routes/adminRoutes.js";
-import paymentRoutes from "./routes/paymentRoutes.js";
-import referralRoutes from "./routes/referralRoutes.js";
-import notificationRoutes from "./routes/notificationRoutes.js";
-import couponRoutes from "./routes/couponRoutes.js";
-import tutorialRoutes from "./routes/tutorialRoutes.js";
-import {
-  startTrialJob
-} from "./jobs/trialJob.js";
-import cron from 'node-cron';
-import bodyParser from 'body-parser';
-import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-  Browsers
-} from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
-import { requireAuth } from './middleware/authMiddleware.js';
+import express from ‘express’; import mongoose from ‘mongoose’; import
+User from ‘./models/User.js’; import connectDatabase from
+“./config/database.js”; import authRoutes from “./routes/authRoutes.js”;
+import adminRoutes from “./routes/adminRoutes.js”; import paymentRoutes
+from “./routes/paymentRoutes.js”; import referralRoutes from
+“./routes/referralRoutes.js”; import notificationRoutes from
+“./routes/notificationRoutes.js”; import couponRoutes from
+“./routes/couponRoutes.js”; import tutorialRoutes from
+“./routes/tutorialRoutes.js”; import { startTrialJob } from
+“./jobs/trialJob.js”; import cron from ‘node-cron’; import bodyParser
+from ‘body-parser’; import dotenv from ‘dotenv’; import fs from ‘fs’;
+import path from ‘path’; import makeWASocket, { useMultiFileAuthState,
+DisconnectReason, fetchLatestBaileysVersion, Browsers } from
+‘@whiskeysockets/baileys’; import { Boom } from ‘@hapi/boom’; import {
+requireAuth } from ‘./middleware/authMiddleware.js’;
 
 dotenv.config();
 
-const OWNER_NUMBER = '2349162539689';
-const BOT_NAME = '48HRS VAULT BOT';
-const BOT_VERSION = '1.0.0';
+const OWNER_NUMBER = ‘2349162539689’; const BOT_NAME = ‘48HRS VAULT
+BOT’; const BOT_VERSION = ‘1.0.0’;
 
-const BOT_LINK = process.env.BOT_LINK || 'https://48hrsvault.com';
-const PAYMENT_LINK = process.env.PAYMENT_LINK || 'YOUR_PAYMENT_LINK';
-const WHATSAPP_CHANNEL = 'https://whatsapp.com/channel/0029Vb8x0L7DjiOlt0DiGE34';
-const TIKTOK_LINK = 'https://www.tiktok.com/@mrmuse124';
-const FACEBOOK_LINK = 'https://www.facebook.com/48HRSvault';
-const SESSION_ROOT = path.join(process.cwd(), 'auth_sessions');
+const BOT_LINK = process.env.BOT_LINK || ‘https://48hrsvault.com’; const
+PAYMENT_LINK = process.env.PAYMENT_LINK || ‘YOUR_PAYMENT_LINK’; const
+WHATSAPP_CHANNEL =
+‘https://whatsapp.com/channel/0029Vb8x0L7DjiOlt0DiGE34’; const
+TIKTOK_LINK = ‘https://www.tiktok.com/@mrmuse124’; const FACEBOOK_LINK =
+‘https://www.facebook.com/48HRSvault’; const SESSION_ROOT =
+path.join(process.cwd(), ‘auth_sessions’);
 
 fs.mkdirSync(SESSION_ROOT, { recursive: true });
 
 const isOwner = (phone) => phone === OWNER_NUMBER;
 
-const isAdmin = async (sock, groupId, participant) => {
-  if (!groupId.endsWith('@g.us')) return false;
+const isAdmin = async (sock, groupId, participant) => { if
+(!groupId.endsWith(‘@g.us’)) return false;
 
-  const metadata = await sock.groupMetadata(groupId);
-  const member = metadata.participants.find((p) => p.id === participant);
+const metadata = await sock.groupMetadata(groupId); const member =
+metadata.participants.find((p) => p.id === participant);
 
-  return !!member?.admin;
-};
+return !!member?.admin; };
 
-const isBotAdmin = async (sock, groupId) => {
-  if (!groupId.endsWith('@g.us')) return false;
+const isBotAdmin = async (sock, groupId) => { if
+(!groupId.endsWith(‘@g.us’)) return false;
 
-  const metadata = await sock.groupMetadata(groupId);
-  const botJid = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
-  const bot = metadata.participants.find((p) => p.id === botJid);
+const metadata = await sock.groupMetadata(groupId); const botJid =
+sock.user?.id?.split(‘:’)[0] + ‘@s.whatsapp.net’; const bot =
+metadata.participants.find((p) => p.id === botJid);
 
-  return !!bot?.admin;
-};
+return !!bot?.admin; };
 
 const app = express();
 
+// …
 
+app.use(bodyParser.json({ verify: (req, res, buf) => { if
+(req.originalUrl === “/api/payment/webhook”) { req.rawBody =
+Buffer.from(buf); } } }));
 
-// ...
+app.use(“/api/auth”, authRoutes); app.use(“/api/admin”, adminRoutes);
+app.use(“/api/payment”, paymentRoutes); app.use(“/api/coupon”,
+couponRoutes); app.use(“/api/tutorials”, tutorialRoutes);
+app.use(“/api/referral”, referralRoutes); app.use( “/api/notification”,
+notificationRoutes ); app.use(“/uploads”,
+express.static(path.join(process.cwd(), “uploads”), { maxAge: “1h” }));
+app.use(express.static(“.”)); const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI ||
+‘mongodb://localhost:27017/48hrs_vault’;
 
-app.use(bodyParser.json({
-  verify: (req, res, buf) => {
-    if (req.originalUrl === "/api/payment/webhook") {
-      req.rawBody = Buffer.from(buf);
-    }
-  }
-}));
+// —————————————————————————– // 1. MONGOOSE SCHEMAS & MODELS //
+—————————————————————————–
 
-app.use("/api/auth", authRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/payment", paymentRoutes);
-app.use("/api/coupon", couponRoutes);
-app.use("/api/tutorials", tutorialRoutes);
-app.use("/api/referral", referralRoutes);
-app.use(
-  "/api/notification",
-  notificationRoutes
-);
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads"), { maxAge: "1h" }));
-app.use(express.static("."));
-const PORT = process.env.PORT || 3000;
-const MONGO_URI =
-  process.env.MONGO_URI || 'mongodb://localhost:27017/48hrs_vault';
+const groupSchema = new mongoose.Schema({ groupId: { type: String,
+required: true, unique: true },
 
-// -----------------------------------------------------------------------------
-// 1. MONGOOSE SCHEMAS & MODELS
-// -----------------------------------------------------------------------------
+antiLink: { type: Boolean, default: false }, trustedLinks: [String],
 
-const groupSchema = new mongoose.Schema({
-  groupId: { type: String, required: true, unique: true },
+antiBot: { type: Boolean, default: false }, antiSpam: { type: Boolean,
+default: false }, antiSticker: { type: Boolean, default: false },
+antiBadWord: { type: Boolean, default: false },
 
-  antiLink: { type: Boolean, default: false },
-  trustedLinks: [String],
+badWords: [String],
 
-  antiBot: { type: Boolean, default: false },
-  antiSpam: { type: Boolean, default: false },
-  antiSticker: { type: Boolean, default: false },
-  antiBadWord: { type: Boolean, default: false },
+welcome: { type: Boolean, default: false }, welcomeMsg: { type: String,
+default: ‘Welcome @user to @group!’ },
 
-  badWords: [String],
+goodbye: { type: Boolean, default: false }, goodbyeMsg: { type: String,
+default: ‘Goodbye @user!’ },
 
-  welcome: { type: Boolean, default: false },
-  welcomeMsg: { type: String, default: 'Welcome @user to @group!' },
+maxWarnings: { type: Number, default: 3 }, userWarnings: { type: Map,
+of: Number, default: {} },
 
-  goodbye: { type: Boolean, default: false },
-  goodbyeMsg: { type: String, default: 'Goodbye @user!' },
+isBlocked: { type: Boolean, default: false } });
 
-  maxWarnings: { type: Number, default: 3 },
-  userWarnings: { type: Map, of: Number, default: {} },
+const Group = mongoose.model(‘Group’, groupSchema);
 
-  isBlocked: { type: Boolean, default: false }
-});
+const botSessionSchema = new mongoose.Schema({ botPhone: { type: String,
+required: true, unique: true }, ownerPhone: { type: String, required:
+true }, sessionId: { type: String, required: true, unique: true },
+botMode: { type: String, enum: [‘public’, ‘private’], default: ‘public’
+}, active: { type: Boolean, default: true }, createdAt: { type: Date,
+default: Date.now } });
 
-const Group = mongoose.model('Group', groupSchema);
+const customCommandSchema = new mongoose.Schema({ ownerPhone: { type:
+String, required: true }, name: { type: String, required: true },
+response: { type: String, required: true }, createdAt: { type: Date,
+default: Date.now } }); customCommandSchema.index({ ownerPhone: 1, name:
+1 }, { unique: true });
 
-const botSessionSchema = new mongoose.Schema({
-  botPhone: { type: String, required: true, unique: true },
-  ownerPhone: { type: String, required: true },
-  sessionId: { type: String, required: true, unique: true },
-  botMode: { type: String, enum: ['public', 'private'], default: 'public' },
-  active: { type: Boolean, default: true },
-  createdAt: { type: Date, default: Date.now }
-});
+const BotSession = mongoose.model(‘BotSession’, botSessionSchema); const
+CustomCommand = mongoose.model(‘CustomCommand’, customCommandSchema);
 
-const customCommandSchema = new mongoose.Schema({
-  ownerPhone: { type: String, required: true },
-  name: { type: String, required: true },
-  response: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now }
-});
-customCommandSchema.index({ ownerPhone: 1, name: 1 }, { unique: true });
-
-const BotSession = mongoose.model('BotSession', botSessionSchema);
-const CustomCommand = mongoose.model('CustomCommand', customCommandSchema);
-
-// -----------------------------------------------------------------------------
-// 2. BAILEYS WHATSAPP BOT ENGINE
-// -----------------------------------------------------------------------------
+// —————————————————————————– // 2. BAILEYS WHATSAPP BOT ENGINE //
+—————————————————————————–
 
 const activeSessions = new Map();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function getUserByPhone(phone) {
-  return User.findOne({ phoneNumber: phone });
-}
+async function getUserByPhone(phone) { return User.findOne({
+phoneNumber: phone }); }
 
-async function ensureUser(phone, { startTrial = true } = {}) {
-  const normalizedPhone = String(phone).replace(/[^0-9]/g, '');
+async function ensureUser(phone, { startTrial = true } = {}) { const
+normalizedPhone = String(phone).replace(/[^0-9]/g, ’’);
 
-  let user = await User.findOne({
-    $or: [
-      { phoneNumber: normalizedPhone },
-      { whatsappNumber: normalizedPhone }
-    ]
-  });
+let user = await User.findOne({ $or: [ { phoneNumber: normalizedPhone },
+{ whatsappNumber: normalizedPhone } ] });
 
-  if (user) {
-    if (!user.phoneNumber) user.phoneNumber = normalizedPhone;
-    if (!user.whatsappNumber) user.whatsappNumber = normalizedPhone;
-    await user.save();
-    return user;
-  }
+if (user) { if (!user.phoneNumber) user.phoneNumber = normalizedPhone;
+if (!user.whatsappNumber) user.whatsappNumber = normalizedPhone; await
+user.save(); return user; }
 
-  const uniqueRef =
-    'REF' +
-    Math.random().toString(36).substring(2, 8).toUpperCase();
+const uniqueRef = ‘REF’ + Math.random().toString(36).substring(2,
+8).toUpperCase();
 
-  user = await User.create({
-    firebaseUid: null,
-    name: `WhatsApp User ${normalizedPhone}`,
-    email: null,
-    role: 'USER',
-    phoneNumber: normalizedPhone,
-    whatsappNumber: normalizedPhone,
-    refCode: uniqueRef,
-    referral: {
-      code: uniqueRef,
-      referredBy: null,
-      qualifiedCount: 0,
-      rewards: {
-        oneMonthClaimed: false,
-        lifetimeClaimed: false
-      }
-    },
-    trialUsed: false,
-    trial: {
-      active: startTrial,
-      startedAt: startTrial ? new Date() : null,
-      expiresAt: startTrial
-        ? new Date(Date.now() + 24 * 60 * 60 * 1000)
-        : null
-    }
-  });
+user = await User.create({ firebaseUid: null, name:
+WhatsApp User ${normalizedPhone}, email: null, role: ‘USER’,
+phoneNumber: normalizedPhone, whatsappNumber: normalizedPhone, refCode:
+uniqueRef, referral: { code: uniqueRef, referredBy: null,
+qualifiedCount: 0, rewards: { oneMonthClaimed: false, lifetimeClaimed:
+false } }, trialUsed: false, trial: { active: startTrial, startedAt:
+startTrial ? new Date() : null, expiresAt: startTrial ? new
+Date(Date.now() + 24 * 60 * 60 * 1000) : null } });
 
-  return user;
-}
+return user; }
 
-async function sendWelcomeMessage(botSock, phone, user, kind = 'trial') {
-  const jid = `${phone}@s.whatsapp.net`;
-  let text;
+async function sendWelcomeMessage(botSock, phone, user, kind = ‘trial’)
+{ const jid = ${phone}@s.whatsapp.net; let text;
 
-  if (kind === 'lifetime') {
-    text = `🎉 *WELCOME TO ${BOT_NAME}*
+if (kind === ‘lifetime’) { text = `🎉 WELCOME TO ${BOT_NAME}
 
-` +
-      `♾️ *LIFETIME VIP ACTIVATED*
++♾️ LIFETIME VIP ACTIVATED
 
-` +
-      `Your bot is now ready to use with lifetime access.
++Your bot is now ready to use with lifetime access.
 
-` +
-      `📚 Type *.menu* to see commands.
-` +
-      `🌐 ${BOT_LINK}
++📚 Type .menu to see commands. +🌐 ${BOT_LINK}
 
-` +
-      `⚠️ *NOTE:* Must JOIN our WhatsApp channel for important information, updates and giveaways.
-` +
-      `📢 ${WHATSAPP_CHANNEL}`;
-  } else if (kind === 'vip') {
-    text = `🎉 *WELCOME BACK TO ${BOT_NAME}*
++⚠️ NOTE: Must JOIN our WhatsApp channel for important information,
+updates and giveaways. +📢
+${WHATSAPP_CHANNEL};   } else if (kind === 'vip') {     text =🎉 WELCOME
+BACK TO ${BOT_NAME}
 
-` +
-      `💎 *VIP ACCESS ACTIVATED*
-` +
-      `Your premium access is now active.
++💎 VIP ACCESS ACTIVATED +Your premium access is now active.
 
-` +
-      `📚 Type *.menu* to see commands.
-` +
-      `🌐 ${BOT_LINK}
++📚 Type .menu to see commands. +🌐 ${BOT_LINK}
 
-` +
-      `⚠️ *NOTE:* Must JOIN our WhatsApp channel for important information, updates and giveaways.
-` +
-      `📢 ${WHATSAPP_CHANNEL}`;
-  } else {
-    text = `🎉 *WELCOME TO ${BOT_NAME}*
++⚠️ NOTE: Must JOIN our WhatsApp channel for important information,
+updates and giveaways. +📢 ${WHATSAPP_CHANNEL};   } else {     text =🎉
+WELCOME TO ${BOT_NAME}
 
-` +
-      `🆓 *24 HOURS FREE TRIAL ACTIVATED!*
++🆓 24 HOURS FREE TRIAL ACTIVATED!
 
-` +
-      `You now have full access to the bot during your trial.
-` +
-      `⏳ Trial ends: *${user.trial?.expiresAt.toLocaleString()}*
++You now have full access to the bot during your trial. +⏳ Trial ends:
+${user.trial?.expiresAt.toLocaleString()}
 
-` +
-      `📚 Type *.menu* to see all commands.
-` +
-      `💳 Upgrade: ${PAYMENT_LINK}
-` +
-      `🌐 ${BOT_LINK}
++📚 Type .menu to see all commands. +💳 Upgrade: ${PAYMENT_LINK} +🌐
+${BOT_LINK}
 
-` +
-      `⚠️ *NOTE:* Must JOIN our WhatsApp channel for important information, updates and giveaways.
-` +
-      `📢 ${WHATSAPP_CHANNEL}
++⚠️ NOTE: Must JOIN our WhatsApp channel for important information,
+updates and giveaways. +📢 ${WHATSAPP_CHANNEL}
 
-` +
-      `OR contact Owner/Admin to make payment:
-` +
-      `🎵 TikTok: ${TIKTOK_LINK}
-` +
-      `📘 Facebook: ${FACEBOOK_LINK}`;
-  }
++OR contact Owner/Admin to make payment: +🎵 TikTok: ${TIKTOK_LINK} +📘
+Facebook: ${FACEBOOK_LINK}`; }
 
-  await botSock.sendMessage(jid, { text });
-}
+await botSock.sendMessage(jid, { text }); }
 
-async function sendToPhone(phone, text) {
-  const session = activeSessions.get(phone) || activeSessions.get(OWNER_NUMBER);
-  if (!session?.sock) return false;
-  try {
-    await session.sock.sendMessage(`${phone}@s.whatsapp.net`, { text });
-    return true;
-  } catch (err) {
-    console.error(`Send-to-phone error for ${phone}:`, err.message);
-    return false;
-  }
-}
+async function sendToPhone(phone, text) { const session =
+activeSessions.get(phone) || activeSessions.get(OWNER_NUMBER); if
+(!session?.sock) return false; try { await
+session.sock.sendMessage(${phone}@s.whatsapp.net, { text }); return
+true; } catch (err) { console.error(Send-to-phone error for ${phone}:,
+err.message); return false; } }
 
-async function connectToWhatsApp(sessionDoc) {
-  const sessionId = sessionDoc.sessionId;
-  const authPath = sessionId === 'owner'
-    ? 'auth_info_baileys'
-    : path.join(SESSION_ROOT, sessionId);
+async function connectToWhatsApp(sessionDoc) { const sessionId =
+sessionDoc.sessionId;
 
-  fs.mkdirSync(authPath, { recursive: true });
+const authPath = sessionId === ‘owner’ ? ‘auth_info_baileys’ :
+path.join(SESSION_ROOT, sessionId);
 
-  const { state, saveCreds } =
-    await useMultiFileAuthState(authPath);
+fs.mkdirSync(authPath, { recursive: true });
 
-  const { version } = await fetchLatestBaileysVersion();
+const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
-  const botSock = makeWASocket({
-  version,
-  auth: state,
-  browser: Browsers.ubuntu('48HRS VAULT BOT'),
-  printQRInTerminal: false,
-  defaultQueryTimeoutMs: undefined
-});
+const { version } = await fetchLatestBaileysVersion();
 
-  botSock.ev.on('creds.update', saveCreds);
+const botSock = makeWASocket({ version, auth: state, browser:
+Browsers.ubuntu(BOT_NAME), printQRInTerminal: false,
+defaultQueryTimeoutMs: undefined });
 
-  botSock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect } = update;
+botSock.ev.on(‘creds.update’, saveCreds);
 
-    if (connection === 'close') {
-      try { await BotSession.updateOne({ sessionId: sessionDoc.sessionId }, { $set: { active: false } }); } catch {}
-      activeSessions.delete(sessionDoc.botPhone);
-      const shouldReconnect =
-        lastDisconnect?.error instanceof Boom
-          ? lastDisconnect.error.output?.statusCode !==
-            DisconnectReason.loggedOut
-          : true;
+botSock.ev.on(‘connection.update’, async (update) => { const {
+connection, lastDisconnect } = update;
 
-      console.log(
-        'Connection closed. Reconnecting...',
-        shouldReconnect
-      );
+    if (connection === 'open') {
+      activeSessions.set(sessionDoc.botPhone, {
+        sock: botSock,
+        session: sessionDoc
+      });
 
-      if (shouldReconnect) {
-        connectToWhatsApp(sessionDoc);
-      }
-    } else if (connection === 'open') {
-      activeSessions.set(sessionDoc.botPhone, { sock: botSock, session: sessionDoc });
       sessionDoc.active = true;
       await sessionDoc.save();
-      console.log(`✅ 48HRS VAULT BOT connected: ${sessionDoc.botPhone}`);
+
+      console.log(
+        `✅ ${BOT_NAME} connected: ${sessionDoc.botPhone}`
+      );
 
       try {
-        const ownerUser = await ensureUser(sessionDoc.ownerPhone, { startTrial: false });
-        const lifetime = sessionDoc.ownerPhone === OWNER_NUMBER || sessionDoc.botPhone === OWNER_NUMBER;
-        if (!lifetime && !ownerUser.vip?.active && !ownerUser.trialUsed && !ownerUser.trial?.active) {
+        const ownerUser = await ensureUser(
+          sessionDoc.ownerPhone,
+          { startTrial: false }
+        );
+
+        const lifetime =
+          sessionDoc.ownerPhone === OWNER_NUMBER ||
+          sessionDoc.botPhone === OWNER_NUMBER;
+
+        if (
+          !lifetime &&
+          !ownerUser.vip?.active &&
+          !ownerUser.trialUsed &&
+          !ownerUser.trial?.active
+        ) {
           ownerUser.trial.active = true;
           ownerUser.trial.startedAt = new Date();
-          ownerUser.trial.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          ownerUser.trial.expiresAt =
+            new Date(Date.now() + 24 * 60 * 60 * 1000);
           ownerUser.sentTrialReminder = false;
           ownerUser.sentTrialExpired = false;
         }
+
         ownerUser.sessionId = sessionDoc.sessionId;
         await ownerUser.save();
+
         if (lifetime) {
           ownerUser.vip.active = true;
           ownerUser.vip.plan = 'LIFETIME';
-          ownerUser.vip.activatedAt = ownerUser.vip.activatedAt || new Date();
+          ownerUser.vip.activatedAt =
+            ownerUser.vip.activatedAt || new Date();
           ownerUser.vip.expiresAt = null;
+
           await ownerUser.save();
-          await sendWelcomeMessage(botSock, sessionDoc.ownerPhone, ownerUser, 'lifetime');
-        } else if (ownerUser.vip?.active && ownerUser.vip?.expiresAt && ownerUser.vip?.expiresAt > new Date()) {
-          await sendWelcomeMessage(botSock, sessionDoc.ownerPhone, ownerUser, 'vip');
-        } else if (ownerUser.trial?.active === true && ownerUser.trial?.expiresAt > new Date()) {
-          await sendWelcomeMessage(botSock, sessionDoc.ownerPhone, ownerUser, 'trial');
+
+          await sendWelcomeMessage(
+            botSock,
+            sessionDoc.ownerPhone,
+            ownerUser,
+            'lifetime'
+          );
+        } else if (
+          ownerUser.vip?.active &&
+          ownerUser.vip?.expiresAt &&
+          ownerUser.vip.expiresAt > new Date()
+        ) {
+          await sendWelcomeMessage(
+            botSock,
+            sessionDoc.ownerPhone,
+            ownerUser,
+            'vip'
+          );
+        } else if (
+          ownerUser.trial?.active === true &&
+          ownerUser.trial?.expiresAt > new Date()
+        ) {
+          await sendWelcomeMessage(
+            botSock,
+            sessionDoc.ownerPhone,
+            ownerUser,
+            'trial'
+          );
         }
       } catch (err) {
         console.error('Welcome message error:', err);
       }
+
+      return;
     }
-  });
 
-  // ---------------------------------------------------------------------------
-  // STATUS AUTO-VIEW & AUTO-LIKE ENGINE
-  // ---------------------------------------------------------------------------
+    if (connection === 'close') {
+      try {
+        await BotSession.updateOne(
+          { sessionId: sessionDoc.sessionId },
+          { $set: { active: false } }
+        );
+      } catch {}
 
-  botSock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
+      activeSessions.delete(sessionDoc.botPhone);
+
+      const statusCode =
+        lastDisconnect?.error instanceof Boom
+          ? lastDisconnect.error.output?.statusCode
+          : undefined;
+
+      const shouldReconnect =
+        statusCode !== DisconnectReason.loggedOut;
+
+      console.log(
+        `⚠️ Connection closed for ${sessionDoc.botPhone}. ` +
+        `statusCode=${statusCode ?? 'unknown'} ` +
+        `reconnect=${shouldReconnect}`
+      );
+
+      if (shouldReconnect) {
+        // Wait before reconnecting so a temporary WhatsApp/network
+        // failure does not create an immediate reconnect loop.
+        setTimeout(() => {
+          connectToWhatsApp(sessionDoc).catch((err) => {
+            console.error(
+              `❌ Reconnect failed for ${sessionDoc.botPhone}:`,
+              err.message
+            );
+          });
+        }, 5000);
+      }
+    }
+
+});
+
+return botSock; }
+
+// ————————————————————————— // STATUS AUTO-VIEW & AUTO-LIKE ENGINE //
+—————————————————————————
+
+botSock.ev.on(‘messages.upsert’, async ({ messages }) => { const msg =
+messages[0];
 
     if (!msg || !msg.message) return;
 
@@ -468,35 +434,23 @@ async function connectToWhatsApp(sessionDoc) {
 
     // -------------------------------------------------------------------------
     // TRIAL USAGE TRACKING
-// -------------------------------------------------------------------------
 
-if (
-  user.trial?.active &&
-  user.trial?.expiresAt &&
-  new Date() < new Date(user.trial.expiresAt) &&
-  !user.trialUsed
-) {
-  user.trialUsed = true;
-  await user.save();
-}
-    // -------------------------------------------------------------------------
-    // OWNER / BOT-OWNER ACCESS
-    // -------------------------------------------------------------------------
+// ————————————————————————-
 
+if ( user.trial?.active && user.trial?.expiresAt && new Date() < new
+Date(user.trial.expiresAt) && !user.trialUsed ) { user.trialUsed = true;
+await user.save(); } // ————————————————————————- // OWNER / BOT-OWNER
+ACCESS // ————————————————————————-
 
-if (botOwnerPhone === OWNER_NUMBER) {
-  botOwnerUser.vip.active = true;
-  botOwnerUser.vip.plan = 'LIFETIME';
-  botOwnerUser.vip.activatedAt =
-    botOwnerUser.vip.activatedAt || new Date();
-  botOwnerUser.vip.expiresAt = null;
+if (botOwnerPhone === OWNER_NUMBER) { botOwnerUser.vip.active = true;
+botOwnerUser.vip.plan = ‘LIFETIME’; botOwnerUser.vip.activatedAt =
+botOwnerUser.vip.activatedAt || new Date(); botOwnerUser.vip.expiresAt =
+null;
 
-  await botOwnerUser.save();
-}
+await botOwnerUser.save(); }
 
-// -------------------------------------------------------------------------
-// ACCOUNT STATUS
-// -------------------------------------------------------------------------
+// ————————————————————————- // ACCOUNT STATUS //
+————————————————————————-
 
 if (user.banned || botOwnerUser.banned) return;
 
@@ -700,8 +654,22 @@ if (user.banned || botOwnerUser.banned) return;
 
         try {
           const session = await connectToWhatsApp(newSession);
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          const code = await session.requestPairingCode(targetPhone);
+
+          await new Promise(resolve =>
+            setTimeout(resolve, 3000)
+          );
+
+          if (
+            !session ||
+            typeof session.requestPairingCode !== 'function'
+          ) {
+            throw new Error(
+              'WhatsApp socket is not ready for pairing.'
+            );
+          }
+
+          const code =
+            await session.requestPairingCode(targetPhone);
           await reply(
             `🔐 *PAIRING CODE GENERATED*\n\n` +
             `📱 Number: *${targetPhone}*\n` +
@@ -1767,99 +1735,115 @@ if (user.banned || botOwnerUser.banned) return;
         );
         break;
     }
-  });
 
-  return botSock;
-}
-
-
-// -----------------------------------------------------------------------------
-// WEBSITE BOT CONNECTION / PAIRING API
-// -----------------------------------------------------------------------------
-
-const normalizePhone = (value) => String(value || '').replace(/[^0-9]/g, '');
-
-app.get('/api/bot/status', requireAuth, async (req, res) => {
-  try {
-    const user = await User.findOne({ firebaseUid: req.user.uid });
-    if (!user) return res.status(404).json({ success:false, message:'User account not found.' });
-    const phone = normalizePhone(user.whatsappNumber || user.phoneNumber);
-    const session = phone ? await BotSession.findOne({ botPhone: phone }) : null;
-    const active = Boolean(session && activeSessions.get(phone)?.sock && session.active);
-    return res.json({ success:true, connected:active, phone:phone || null, sessionId:session?.sessionId || null, trial:user.trial, vip:user.vip });
-  } catch (e) { return res.status(500).json({ success:false,message:'Unable to load bot status.' }); }
 });
 
-app.post('/api/bot/pair', requireAuth, async (req, res) => {
-  try {
-    const targetPhone = normalizePhone(req.body.whatsappNumber);
-    if (targetPhone.length < 10 || targetPhone.length > 15) return res.status(400).json({ success:false,message:'Enter a valid WhatsApp number with country code, e.g. 2348012345678.' });
-    const user = await User.findOne({ firebaseUid:req.user.uid });
-    if (!user) return res.status(404).json({success:false,message:'User account not found.'});
-    if (user.banned) return res.status(403).json({success:false,message:'Your account is banned.'});
-    const ownedNumber = normalizePhone(user.whatsappNumber || user.phoneNumber);
-    const adminEmails=(process.env.ADMIN_EMAILS||'').split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
-    const isAdmin=adminEmails.includes((req.user.email||'').toLowerCase());
-    if (!isAdmin && ownedNumber !== targetPhone) return res.status(403).json({success:false,message:'Connect the WhatsApp number registered on your account.'});
-    if (targetPhone === OWNER_NUMBER) return res.status(400).json({success:false,message:'That number is reserved for the bot administrator.'});
-    const existing=await BotSession.findOne({botPhone:targetPhone});
-    if(existing && existing.active && activeSessions.get(targetPhone)?.sock) return res.status(409).json({success:false,message:'That WhatsApp number is already connected.'});
-    const targetUser=await ensureUser(targetPhone,{startTrial:false});
-    if (!targetUser.vip?.active && targetUser.trial?.expiresAt && targetUser.trial.expiresAt <= new Date() && targetUser.trialUsed) return res.status(403).json({success:false,message:'Your 24-hour free trial has expired. Upgrade to VIP to reconnect.'});
-    const sessionDoc=existing || await BotSession.create({botPhone:targetPhone,ownerPhone:targetPhone,sessionId:`bot_${targetPhone}`,botMode:'public'});
-    targetUser.whatsappNumber=targetPhone;targetUser.phoneNumber=targetPhone;targetUser.sessionId=sessionDoc.sessionId;await targetUser.save();
-    const sock = await connectToWhatsApp(sessionDoc);
+return botSock; }
 
-await new Promise(resolve => setTimeout(resolve, 5000));
+// —————————————————————————– // WEBSITE BOT CONNECTION / PAIRING API //
+—————————————————————————–
 
-const code = await sock.requestPairingCode(targetPhone);
-return botSock;
-    return res.json({success:true,message: targetUser.vip?.active ? 'Pairing code generated.' : 'Pairing code generated. Your 24-hour free trial will be active when the bot connects.',pairingCode:code,phone:targetPhone,trial:targetUser.trial,vip:targetUser.vip,instructions:['Open WhatsApp on the number above.','Go to Settings → Linked Devices → Link a Device.','Choose “Link with phone number instead”.','Enter the pairing code shown here.']});
-  } catch (e) { console.error('Website pairing error:',e); return res.status(500).json({success:false,message:e.message||'Unable to generate pairing code.'}); }
-});
+const normalizePhone = (value) => String(value ||
+’‘).replace(/[^0-9]/g,’’);
 
-app.post('/api/bot/disconnect', requireAuth, async (req,res)=>{try{const user=await User.findOne({firebaseUid:req.user.uid});if(!user)return res.status(404).json({success:false,message:'User not found.'});const phone=normalizePhone(user.whatsappNumber||user.phoneNumber);const session=activeSessions.get(phone);if(session?.sock)try{await session.sock.logout();}catch{}activeSessions.delete(phone);await BotSession.updateOne({botPhone:phone},{$set:{active:false}});await User.updateOne({firebaseUid:req.user.uid},{$set:{sessionId:null}});res.json({success:true,message:'Bot disconnected.'});}catch(e){res.status(500).json({success:false,message:'Unable to disconnect bot.'});}});
+app.get(‘/api/bot/status’, requireAuth, async (req, res) => { try {
+const user = await User.findOne({ firebaseUid: req.user.uid }); if
+(!user) return res.status(404).json({ success:false, message:‘User
+account not found.’ }); const phone = normalizePhone(user.whatsappNumber
+|| user.phoneNumber); const session = phone ? await BotSession.findOne({
+botPhone: phone }) : null; const active = Boolean(session &&
+activeSessions.get(phone)?.sock && session.active); return res.json({
+success:true, connected:active, phone:phone || null,
+sessionId:session?.sessionId || null, trial:user.trial, vip:user.vip });
+} catch (e) { return res.status(500).json({
+success:false,message:‘Unable to load bot status.’ }); } });
 
-async function initializeBotSessions() {
-  let ownerSession = await BotSession.findOne({ botPhone: OWNER_NUMBER });
-  if (!ownerSession) {
-    ownerSession = await BotSession.create({
-      botPhone: OWNER_NUMBER,
-      ownerPhone: OWNER_NUMBER,
-      sessionId: 'owner',
-      botMode: 'public'
-    });
-  }
+app.post(‘/api/bot/pair’, requireAuth, async (req, res) => { try { const
+targetPhone = normalizePhone(req.body.whatsappNumber); if
+(targetPhone.length < 10 || targetPhone.length > 15) return
+res.status(400).json({ success:false,message:‘Enter a valid WhatsApp
+number with country code, e.g. 2348012345678.’ }); const user = await
+User.findOne({ firebaseUid:req.user.uid }); if (!user) return
+res.status(404).json({success:false,message:‘User account not found.’});
+if (user.banned) return
+res.status(403).json({success:false,message:‘Your account is banned.’});
+const ownedNumber = normalizePhone(user.whatsappNumber ||
+user.phoneNumber); const
+adminEmails=(process.env.ADMIN_EMAILS||’‘).split(’,‘).map(v=>v.trim().toLowerCase()).filter(Boolean);
+const isAdmin=adminEmails.includes((req.user.email||’‘).toLowerCase());
+if (!isAdmin && ownedNumber !== targetPhone) return
+res.status(403).json({success:false,message:’Connect the WhatsApp number
+registered on your account.’}); if (targetPhone === OWNER_NUMBER) return
+res.status(400).json({success:false,message:‘That number is reserved for
+the bot administrator.’}); const existing=await
+BotSession.findOne({botPhone:targetPhone}); if(existing &&
+existing.active && activeSessions.get(targetPhone)?.sock) return
+res.status(409).json({success:false,message:‘That WhatsApp number is
+already connected.’}); const targetUser=await
+ensureUser(targetPhone,{startTrial:false}); if (!targetUser.vip?.active
+&& targetUser.trial?.expiresAt && targetUser.trial.expiresAt <= new
+Date() && targetUser.trialUsed) return
+res.status(403).json({success:false,message:‘Your 24-hour free trial has
+expired. Upgrade to VIP to reconnect.’}); const sessionDoc=existing ||
+await
+BotSession.create({botPhone:targetPhone,ownerPhone:targetPhone,sessionId:bot_${targetPhone},botMode:‘public’});
+targetUser.whatsappNumber=targetPhone;targetUser.phoneNumber=targetPhone;targetUser.sessionId=sessionDoc.sessionId;await
+targetUser.save(); const sock = await connectToWhatsApp(sessionDoc);
 
-  const sessions = await BotSession.find({ active: true });
-  for (const session of sessions) {
-    try {
-      await connectToWhatsApp(session);
-      await sleep(800);
-    } catch (err) {
-      console.error(`Failed to start session ${session.botPhone}:`, err);
+    await new Promise(resolve =>
+      setTimeout(resolve, 3000)
+    );
+
+    if (
+      !sock ||
+      typeof sock.requestPairingCode !== 'function'
+    ) {
+      throw new Error(
+        'WhatsApp socket is not ready for pairing.'
+      );
     }
-  }
-}
-// -----------------------------------------------------------------------------
-// 3. PAYSTACK WEBHOOK
-// -----------------------------------------------------------------------------
-// Paystack webhook is handled securely by routes/paymentRoutes.js at /api/payment/webhook.
 
-// -----------------------------------------------------------------------------
-// 5. SERVER & DATABASE INITIALIZATION
-// -----------------------------------------------------------------------------
+    const code =
+      await sock.requestPairingCode(targetPhone);
 
-connectDatabase()
-  .then(async () => {
-    console.log("✅ Connected to MongoDB Database");
-startTrialJob();
-    app.listen(PORT, async () => {
-      console.log(`🚀 Web Server running on port ${PORT}`);
+    return res.json({success:true,message: targetUser.vip?.active ? 'Pairing code generated.' : 'Pairing code generated. Your 24-hour free trial will be active when the bot connects.',pairingCode:code,phone:targetPhone,trial:targetUser.trial,vip:targetUser.vip,instructions:['Open WhatsApp on the number above.','Go to Settings → Linked Devices → Link a Device.','Choose “Link with phone number instead”.','Enter the pairing code shown here.']});
+
+} catch (e) { console.error(‘Website pairing error:’,e); return
+res.status(500).json({success:false,message:e.message||‘Unable to
+generate pairing code.’}); } });
+
+app.post(‘/api/bot/disconnect’, requireAuth, async (req,res)=>{try{const
+user=await User.findOne({firebaseUid:req.user.uid});if(!user)return
+res.status(404).json({success:false,message:‘User not found.’});const
+phone=normalizePhone(user.whatsappNumber||user.phoneNumber);const
+session=activeSessions.get(phone);if(session?.sock)try{await
+session.sock.logout();}catch{}activeSessions.delete(phone);await
+BotSession.updateOne({botPhone:phone},{$set:{active:false}});await User.updateOne({firebaseUid:req.user.uid},{$set:{sessionId:null}});res.json({success:true,message:‘Bot
+disconnected.’});}catch(e){res.status(500).json({success:false,message:‘Unable
+to disconnect bot.’});}});
+
+async function initializeBotSessions() { let ownerSession = await
+BotSession.findOne({ botPhone: OWNER_NUMBER }); if (!ownerSession) {
+ownerSession = await BotSession.create({ botPhone: OWNER_NUMBER,
+ownerPhone: OWNER_NUMBER, sessionId: ‘owner’, botMode: ‘public’ }); }
+
+const sessions = await BotSession.find({ active: true }); for (const
+session of sessions) { try { await connectToWhatsApp(session); await
+sleep(800); } catch (err) {
+console.error(Failed to start session ${session.botPhone}:, err); } } }
+// —————————————————————————– // 3. PAYSTACK WEBHOOK //
+—————————————————————————– // Paystack webhook is handled securely by
+routes/paymentRoutes.js at /api/payment/webhook.
+
+// —————————————————————————– // 5. SERVER & DATABASE INITIALIZATION //
+—————————————————————————–
+
+connectDatabase() .then(async () => { console.log(“✅ Connected to
+MongoDB Database”); startTrialJob(); app.listen(PORT, async () => {
+console.log(🚀 Web Server running on port ${PORT});
 
       await initializeBotSessions();
     });
-  })
-  .catch((err) => {
-    console.error("❌ Database connection failed:", err);
-  });
+
+}) .catch((err) => { console.error(“❌ Database connection failed:”,
+err); });
