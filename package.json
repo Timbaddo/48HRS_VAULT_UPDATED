@@ -9,7 +9,7 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "7.0.0-rc13",
+    "@whiskeysockets/baileys": "6.7.23",
     "axios": "latest",
     "body-parser": "latest",
     "cors": "latest",
