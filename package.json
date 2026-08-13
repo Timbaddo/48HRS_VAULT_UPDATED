@@ -9,18 +9,18 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "7.0.0-rc13", 
-    "axios": "latest",
-    "body-parser": "latest",
-    "cors": "latest",
-    "dotenv": "latest",
-    "express": "latest",
-    "firebase-admin": "latest",
-    "mongoose": "latest",
-    "multer": "latest",
-    "node-cron": "latest",
-    "pino": "latest",
+    "@whiskeysockets/baileys": "6.7.23",
     "@hapi/boom": "^10.0.1",
-    "cloudinary": "latest"
+    "axios": "1.8.4",
+    "body-parser": "1.20.3",
+    "cloudinary": "2.6.1",
+    "cors": "2.8.5",
+    "dotenv": "16.5.0",
+    "express": "5.1.0",
+    "firebase-admin": "13.2.0",
+    "mongoose": "8.13.2",
+    "multer": "1.4.5-lts.2",
+    "node-cron": "4.2.1",
+    "pino": "9.6.0"
   }
 }
