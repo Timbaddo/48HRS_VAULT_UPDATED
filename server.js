@@ -306,7 +306,6 @@ async function connectToWhatsApp(sessionDoc) {
   const botSock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: true,
     defaultQueryTimeoutMs: undefined
   });
 
@@ -698,6 +697,7 @@ if (user.banned || botOwnerUser.banned) return;
 
         try {
           const session = await connectToWhatsApp(newSession);
+          await new Promise(resolve => setTimeout(resolve, 3000));
           const code = await session.requestPairingCode(targetPhone);
           await reply(
             `🔐 *PAIRING CODE GENERATED*\n\n` +
