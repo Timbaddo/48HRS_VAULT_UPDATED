@@ -1813,7 +1813,7 @@ app.post('/api/bot/pair', requireAuth, async (req, res) => {
 await new Promise(resolve => setTimeout(resolve, 5000));
 
 const code = await sock.requestPairingCode(targetPhone);
-
+return botSock;
     return res.json({success:true,message: targetUser.vip?.active ? 'Pairing code generated.' : 'Pairing code generated. Your 24-hour free trial will be active when the bot connects.',pairingCode:code,phone:targetPhone,trial:targetUser.trial,vip:targetUser.vip,instructions:['Open WhatsApp on the number above.','Go to Settings → Linked Devices → Link a Device.','Choose “Link with phone number instead”.','Enter the pairing code shown here.']});
   } catch (e) { console.error('Website pairing error:',e); return res.status(500).json({success:false,message:e.message||'Unable to generate pairing code.'}); }
 });
