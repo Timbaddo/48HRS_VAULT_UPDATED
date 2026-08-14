@@ -1,45 +1,55 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create account — 48HRS VAULT</title><link rel="icon" href="/logo.png"><link rel="stylesheet" href="/frontend/css/style.css"></head>
-<body class="auth-page">
-  <main class="auth-shell">
-    <a class="brand centered" href="/index.html"><img src="/logo.png" alt="48HRS VAULT"><span>48HRS <b>VAULT</b></span></a>
-    <section class="auth-card glass">
-      <div class="channel-callout">
-        <strong>📢 Official WhatsApp Channel</strong>
-        <p>JOIN US NOW BEFORE YOU CONTINUE.</p>
-        <a class="btn btn-ghost full" href="https://whatsapp.com/channel/0029Vb8x0L7DjiOlt0DiGE34" target="_blank" rel="noopener">Join Our WhatsApp Channel</a>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="auth-container">
+    <h2>Create Account</h2>
+    <form id="signup-form">
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" required placeholder="enter@email.com" />
       </div>
-      <span class="eyebrow">CREATE ACCOUNT</span><h1>Start your free trial.</h1><p class="muted">Create your account, then connect your WhatsApp number.</p>
-      <form id="signupForm">
-        <label>Name<input id="name" required autocomplete="name"></label>
-        <label>Email<input id="email" type="email" required autocomplete="email"></label>
-        <label>Password<input id="password" type="password" minlength="6" required autocomplete="new-password"></label>
-        <label>WhatsApp number<input id="whatsappNumber" placeholder="2348012345678" inputmode="numeric"></label>
-        <label>Country<input id="country" value="Nigeria"></label>
-        <label>Referral code <span class="muted">(optional)</span><input id="referralCode"></label>
-        <button class="btn full" type="submit">Create account</button>
-      </form>
-      <p id="message" class="form-message"></p>
-      <p class="switch">Already have an account? <a href="/login.html">Login</a></p>
-    </section>
-  </main>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" required placeholder="******" />
+      </div>
+      <button type="submit" id="signup-btn">Sign Up</button>
+      <p id="msg" class="message"></p>
+    </form>
+  </div>
+
   <script type="module">
-    import { signup } from '/frontend/js/auth.js';
-    import { auth } from '/frontend/js/firebase.js';
-    const form=document.getElementById('signupForm'), msg=document.getElementById('message');
-    const nameInput=document.getElementById('name'), emailInput=document.getElementById('email'), passwordInput=document.getElementById('password'), whatsappInput=document.getElementById('whatsappNumber'), countryInput=document.getElementById('country'), referralInput=document.getElementById('referralCode');
-    const params=new URLSearchParams(location.search); referralInput.value=params.get('ref')||'';
-    form.addEventListener('submit', async e=>{
-      e.preventDefault(); msg.textContent='Creating account…';
-      const result=await signup(emailInput.value.trim(), passwordInput.value);
-      if(!result.success){msg.textContent=result.message;return;}
-      try{
-        const token=await auth.currentUser.getIdToken(true);
-        const response=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({name:nameInput.value.trim(),email:emailInput.value.trim(),whatsappNumber:whatsappInput.value.trim(),country:countryInput.value.trim(),referralCode:referralInput.value.trim()})});
-        const data=await response.json(); if(!response.ok) throw new Error(data.message||'Registration failed.');
-        location.href='/dashboard.html';
-      }catch(err){msg.textContent=err.message;}
+    import { signup } from "./js/auth.js";
+
+    const form = document.getElementById("signup-form");
+    const msg = document.getElementById("msg");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      msg.style.color = "#0056b3";
+      msg.textContent = "Creating account...";
+
+      const res = await signup(email, password);
+
+      if (res.success) {
+        msg.style.color = "green";
+        msg.textContent = "Account created successfully! Redirecting...";
+        setTimeout(() => {
+          window.location.href = "dashboard.html";
+        }, 1500);
+      } else {
+        msg.style.color = "red";
+        msg.textContent = res.message;
+      }
     });
   </script>
-</body></html>
+</body>
+</html>

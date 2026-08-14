@@ -90,8 +90,8 @@ app.use(
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads"), { maxAge: "1h" }));
 app.use(express.static("."));
 const PORT = process.env.PORT || 3000;
-const MONGO_URI =
-  process.env.MONGO_URI || 'mongodb://localhost:27017/48hrs_vault';
+const MONGODB_URI =
+  process.env.MONGODB_URI || 'mongodb://localhost:27017/48hrs_vault';
 
 // -----------------------------------------------------------------------------
 // 1. MONGOOSE SCHEMAS & MODELS
