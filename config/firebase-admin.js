@@ -1,3 +1,4 @@
+// config/firebase-admin.js
 import admin from "firebase-admin";
 
 const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -20,4 +21,6 @@ if (!admin.apps.length) {
   });
 }
 
+// Export the auth service instance for authMiddleware.js
+export const adminAuth = admin.auth();
 export default admin;

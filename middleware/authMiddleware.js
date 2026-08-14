@@ -1,35 +1,23 @@
+// middleware/authMiddleware.js
 import { adminAuth } from "../config/firebase-admin.js";
 
-export const requireAuth = async (req, res, next) => {
+export async function verifyFirebaseToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized: No token provided." });
+  }
+
+  const token = authHeader.split(" ")[1];
+
   try {
-    const authorization = req.headers.authorization;
-    if (!authorization || !authorization.startsWith("Bearer ")) {
-      return res.status(401).json({ success: false, message: "Authentication required." });
-    }
-    const idToken = authorization.slice(7);
-    if (!idToken) return res.status(401).json({ success: false, message: "Invalid authentication token." });
-    req.user = await adminAuth.verifyIdToken(idToken);
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    req.user = decodedToken;
     next();
   } catch (error) {
-    console.error("Authentication error:", error.message);
-    return res.status(401).json({ success: false, message: "Invalid or expired authentication token." });
+    return res.status(401).json({ 
+      message: "Unauthorized: Invalid or expired token.", 
+      error: error.message 
+    });
   }
-};
-
-export const requireAdmin = async (req, res, next) => {
-  try {
-    if (!req.user) return res.status(401).json({ success: false, message: "Authentication required." });
-    const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean);
-    const email = (req.user.email || "").toLowerCase();
-    if (!email || !adminEmails.includes(email)) {
-      return res.status(403).json({ success: false, message: "Admin access required." });
-    }
-    req.isAdmin = true;
-    next();
-  } catch (error) {
-    console.error("Admin authorization error:", error.message);
-    return res.status(403).json({ success: false, message: "Admin authorization failed." });
-  }
-};
-
-export const requireOwner = requireAdmin;
+}
