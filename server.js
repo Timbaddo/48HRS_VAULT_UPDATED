@@ -20,8 +20,10 @@ import path from 'path';
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  delay
 } from '@whiskeysockets/baileys';
+
 import { Boom } from '@hapi/boom';
 import { requireAuth } from './middleware/authMiddleware.js';
 
@@ -1805,9 +1807,28 @@ app.post('/api/bot/pair', requireAuth, async (req, res) => {
     if (!targetUser.vip?.active && targetUser.trial?.expiresAt && targetUser.trial.expiresAt <= new Date() && targetUser.trialUsed) return res.status(403).json({success:false,message:'Your 24-hour free trial has expired. Upgrade to VIP to reconnect.'});
     const sessionDoc=existing || await BotSession.create({botPhone:targetPhone,ownerPhone:targetPhone,sessionId:`bot_${targetPhone}`,botMode:'public'});
     targetUser.whatsappNumber=targetPhone;targetUser.phoneNumber=targetPhone;targetUser.sessionId=sessionDoc.sessionId;await targetUser.save();
-    const sock=await connectToWhatsApp(sessionDoc);
-    const code=await sock.requestPairingCode(targetPhone);
-    return res.json({success:true,message: targetUser.vip?.active ? 'Pairing code generated.' : 'Pairing code generated. Your 24-hour free trial will be active when the bot connects.',pairingCode:code,phone:targetPhone,trial:targetUser.trial,vip:targetUser.vip,instructions:['Open WhatsApp on the number above.','Go to Settings → Linked Devices → Link a Device.','Choose “Link with phone number instead”.','Enter the pairing code shown here.']});
+    const sock = await connectToWhatsApp(sessionDoc);
+
+const cleanPhone = targetPhone.replace(/[^0-9]/g, '');
+await delay(3000);
+
+const code = await sock.requestPairingCode(cleanPhone);
+
+return res.json({
+  success: true,
+  message: targetUser.vip?.active ? 'Pairing code generated.' : 'Pairing code generated. Your 24-hour free trial will be active when the bot connects.',
+  pairingCode: code,
+  phone: targetPhone,
+  trial: targetUser.trial,
+  vip: targetUser.vip,
+  instructions: [
+    'Open WhatsApp on the number above.',
+    'Go to Settings -> Linked Devices -> Link a Device.',
+    'Choose "Link with phone number instead".',
+    'Enter the pairing code shown here.'
+  ]
+});
+
   } catch (e) { console.error('Website pairing error:',e); return res.status(500).json({success:false,message:e.message||'Unable to generate pairing code.'}); }
 });
 
