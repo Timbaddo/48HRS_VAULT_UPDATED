@@ -22,5 +22,5 @@ export async function verifyFirebaseToken(req, res, next) {
   }
 }
 
-// Export requireAuth so authRoutes.js can import it directly
+// Export requireAuth so authRoutes.js can import it
 export const requireAuth = verifyFirebaseToken;
