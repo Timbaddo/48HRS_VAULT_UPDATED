@@ -52,4 +52,14 @@ export async function notifyReferralReward(userId, rewardAmount) {
     "reward"   
   ); 
 }
+
+// ADDED MISSING COUPON NOTIFICATION
+export async function notifyCouponRedeemed(userId, couponCode, reward) {   
+  return createNotification(     
+    userId,     
+    "Coupon Redeemed",     
+    `You successfully redeemed coupon code ${couponCode}!`,     
+    "reward"   
+  ); 
+}
  
