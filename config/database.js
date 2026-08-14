@@ -9,4 +9,7 @@ export async function connectDB() {
     process.exit(1);   
   }
 }
+
+// Default export added so server.js import works smoothly
+export default connectDB;
  
