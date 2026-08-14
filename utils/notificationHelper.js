@@ -1,3 +1,4 @@
+// utils/notificationHelper.js
 import Notification from "../models/Notification.js";
 
 export async function createNotification(userId, title, message, type = "info") {
@@ -42,5 +43,4 @@ export async function notifyReferralReward(userId, rewardAmount) {
     `You earned ₦${rewardAmount} from a referral sign-up!`,
     "reward"
   );
-}
 }
