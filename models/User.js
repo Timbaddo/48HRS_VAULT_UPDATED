@@ -39,17 +39,16 @@ const userSchema = new mongoose.Schema(
     // WHATSAPP ACCOUNT
     // ==========================================
 
-    phoneNumber: {
+phoneNumber: {
   type: String,
   unique: true,
   sparse: true,
   trim: true
 },
-
-    whatsappNumber: {
-      type: String,
-      default: null
-    },
+whatsappNumber: {
+  type: String,
+  default: null
+},
 
     country: {
       type: String,
