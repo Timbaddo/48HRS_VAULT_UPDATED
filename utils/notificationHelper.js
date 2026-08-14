@@ -27,6 +27,15 @@ export async function notifyPaymentReceived(userId, amount) {
   );
 }
 
+export async function notifyPaymentApproved(userId, amount) {
+  return createNotification(
+    userId,
+    "Payment Approved",
+    `Your payment of ₦${amount} has been approved.`,
+    "payment"
+  );
+}
+
 export async function notifyVipActivated(userId) {
   return createNotification(
     userId,
